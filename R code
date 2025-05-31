@@ -1,0 +1,95 @@
+# app.R: Shiny App for Analyzing Rainfall Patterns Over the Last Decade in a Region 
+# Place this file and your rainfall_data.csv in the same directory, then run 
+shiny::runApp(".") 
+library(shiny) 
+library(dplyr) 
+library(ggplot2) 
+library(lubridate) 
+library(DT) 
+ui <- fluidPage( 
+titlePanel("     
+Decadal Rainfall Pattern Analyzer 🌦"), 
+sidebarLayout( 
+sidebarPanel( 
+fileInput("file", "   
+Upload Rainfall CSV", accept = c(".csv")), 
+selectInput("region", "   
+Select Region:", choices = NULL), 
+dateRangeInput("dates", "🗓 Date Range:", 
+start = today() - years(10), end = today()), 
+actionButton("run", "        
+Analyze", class = "btn-success"), 
+br(), br(), 
+helpText("Upload a file with columns: Region, Date, Rainfall_mm.") 
+), 
+mainPanel( 
+tabsetPanel( 
+tabPanel("         
+tabPanel("    
+tabPanel("      
+tabPanel("       
+) 
+) 
+Data Table", DTOutput("table")), 
+Time Series", plotOutput("tsPlot")), 
+Seasonal Boxplot", plotOutput("seasonPlot")), 
+Summary", verbatimTextOutput("summaryText")) 
+) 
+) 
+server <- function(input, output, session) { 
+rawData <- reactive({ 
+req(input$file) 
+df <- read.csv(input$file$datapath, stringsAsFactors = FALSE) 
+df$Date <- as.Date(df$Date) 
+df 
+}) 
+observeEvent(rawData(), { 
+regions <- unique(rawData()$Region) 
+updateSelectInput(session, "region", choices = regions) 
+}) 
+filtered <- eventReactive(input$run, { 
+df <- rawData() %>% 
+filter(Region == input$region, 
+Date >= input$dates[1], Date <= input$dates[2]) 
+df$Year <- year(df$Date) 
+df$Month <- month(df$Date, label = TRUE) 
+df 
+}) 
+output$table <- renderDT({ 
+datatable(filtered(), options = list(pageLength = 10, scrollX = TRUE)) 
+}) 
+output$tsPlot <- renderPlot({ 
+df <- filtered() %>% 
+group_by(Date) %>% 
+summarize(Rainfall = sum(Rainfall_mm)) 
+ggplot(df, aes(x = Date, y = Rainfall)) + 
+geom_line() + 
+labs( 
+title = paste("Daily Rainfall in", input$region), 
+x = "Date", y = "Rainfall (mm)" 
+) + 
+theme_minimal() 
+}) 
+output$seasonPlot <- renderPlot({ 
+df <- filtered() 
+ggplot(df, aes(x = Month, y = Rainfall_mm)) + 
+geom_boxplot() + 
+labs( 
+title = paste("Monthly Rainfall Distribution in", input$region), 
+x = "Month", y = "Rainfall (mm)" 
+) + 
+theme_minimal() 
+}) 
+output$summaryText <- renderPrint({ 
+df <- filtered() 
+cat("Rainfall Analysis Summary\n") 
+cat("Region:", input$region, "\n") 
+cat("Period:", format(input$dates[1]), "to", format(input$dates[2]), "\n") 
+cat("Total Records:", nrow(df), "\n") 
+cat("Total Rainfall (mm):", sum(df$Rainfall_mm), "\n") 
+cat("Average Daily Rainfall (mm):", round(mean(df$Rainfall_mm), 2), "\n") 
+cat("Wettest Day:", as.character(df$Date[which.max(df$Rainfall_mm)]), "with", 
+max(df$Rainfall_mm), "mm\n") 
+}) 
+} 
+shinyApp(ui = ui, server = server) 
